@@ -67,6 +67,10 @@ class OrdersAdapter(val onCollected: (String) -> Unit, val onDelivered: (String)
             val i = Intent(Intent.ACTION_VIEW, Uri.parse(directionsUrl(from, to!!)))
             try { ctx.startActivity(i) } catch (e: Exception) { android.widget.Toast.makeText(ctx, "no maps app: ${e.message}", android.widget.Toast.LENGTH_SHORT).show() }
         }
+        h.itemView.findViewById<Button>(R.id.mapBtn).setOnClickListener {
+            val ctx = h.itemView.context
+            ctx.startActivity(android.content.Intent(ctx, MapActivity::class.java).putExtra("order", id))
+        }
         val pill = h.itemView.findViewById<TextView>(R.id.status); pill.text = status
         pill.setBackgroundResource(if (status == "ready") R.drawable.pill_ready else R.drawable.pill_collected)
         val b = h.itemView.findViewById<Button>(R.id.action)

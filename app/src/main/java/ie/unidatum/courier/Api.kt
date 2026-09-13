@@ -8,7 +8,29 @@ import java.net.URL
 
 /** The engine's HTTP API, the calls the build sheet lists: put, find, count, update, status, peers, sync, replicate. */
 class Api(val base: String) {
-    internal fun call(method: String, path: String, body: JSONObject? = null, timeoutMs: Int = 20000): JSONObject {
+    internal fun call(method: String, path: String, body: JSONObject? = null, timeoutMs: Int = 20000): JSONObject =
+        try { once(method, path, body, timeoutMs) } catch (e: ApiError) {
+            // A collection is read or written only when every member is local, and a member another node just wrote
+            // may not be here yet. Ask the node to replicate the collection — the engine walks its manifest, which is
+            // the only right list of members — then try again. Never filter by file name: a fold rewrites members as
+            // unidatum-compact-N-M.parquet, and a name filter skips exactly those.
+            val coll = body?.optString("collection").orEmpty()
+            if (coll.isEmpty() || e.message?.contains("needs every member local") != true) throw e
+            NodeService.logLine("replicate $coll: " + once("POST", "/api/table/replicate", JSONObject().put("table", coll), 60000).optString("msg"))
+            waitLocal()
+            once(method, path, body, timeoutMs)
+        }
+
+    /** Wait, briefly, until the node holds every member it knows of. */
+    private fun waitLocal() {
+        for (i in 0 until 40) {
+            val missing = try { files().any { !it.optBoolean("local") && !it.optString("name").contains(".cursors.") } } catch (e: Exception) { false }
+            if (!missing) return
+            Thread.sleep(500)
+        }
+    }
+
+    private fun once(method: String, path: String, body: JSONObject? = null, timeoutMs: Int = 20000): JSONObject {
         val c = URL(base + path).openConnection() as HttpURLConnection
         c.requestMethod = method
         c.connectTimeout = timeoutMs; c.readTimeout = timeoutMs
@@ -53,12 +75,3 @@ class Api(val base: String) {
 }
 
 class ApiError(msg: String) : Exception(msg)
-
-/** A node writes a collection only when every member is local; fetch what is still missing first (the MVP's lib/api.mjs ensureLocal). */
-fun Api.ensureLocal(prefix: String): Int {
-    fun missing() = files().filter { !it.optBoolean("local") && it.optString("name").startsWith(prefix) && !it.optString("name").contains(".cursors.") }
-    val m = missing()
-    for (f in m) try { fetch(f.getString("hash")) } catch (_: Exception) {}
-    if (m.isNotEmpty()) for (i in 0 until 20) { if (missing().isEmpty()) break; Thread.sleep(500) }
-    return m.size
-}

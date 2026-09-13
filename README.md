@@ -133,6 +133,66 @@ end to end, phone to platform.
 The card shows the distance to whichever point the courier is heading for,
 computed from the same position.
 
+### The map
+
+<img src="docs/screenshots/7-map.jpg" width="360" alt="The in-app map: OpenStreetMap tiles of Dublin, the courier's pin at Islandbridge, a cycling route along the quays to the pickup pin at Camden Street, 2.7 km and 8 minutes">
+
+Everything on this screen comes from two documents the phone already holds:
+the order, from its own node, and the position it writes itself. The map is
+a renderer, not another source of truth. The tiles are OpenStreetMap's
+through osmdroid, so the app needs no map key and no Play Services, for the
+same reason it bundles the engine rather than calling a server.
+
+The line is a real cycling route from OSRM's public router, redrawn when the
+target changes: the courier's position to the pickup while the order is
+ready, the pickup to the customer once it is collected. It opens showing the
+whole leg; Follow me tracks the courier from there, Navigate hands the leg to
+the phone's maps app for turn-by-turn, and Collected and Delivered are here
+too, so nobody has to go back to the list mid-ride.
+
+The simulated ride follows the same polyline, which is why the track on the
+map runs along streets rather than through buildings.
+
+### Positions the hub can trust
+
+The build sheet asks for `location` and `state` to be "signed with the
+courier app's key, held by courier app, verified by hub". Held here means
+held: the key is generated inside the phone's keystore and never leaves it.
+On this hardware the keystore put it in the secure element — the app's own
+status line reads `signed strongbox` — so the private half is not readable
+by this app, by a backup, or by anyone who later roots the phone. The app
+can ask it to sign; it cannot copy it.
+
+Each position write carries the exact string it signed:
+
+```
+unidatum-courier-position/v1|app-sm-s918u|-6.299816|53.345493|2026-09-13T02:18:15.278002Z
+```
+
+and the public key sits on the courier's own document, so the hub verifies
+without a key exchange. The MVP's `sims/hub-verify.mjs` rebuilds that string
+from the document's own fields and checks the signature over it, which is
+what makes it worth signing: the claim cannot be re-pointed at another
+courier, another place or another moment without breaking.
+
+Both tampering cases, run against the live fleet:
+
+| what was done to the courier document | what the hub said |
+|---|---|
+| another writer moved the position 2 km | `claim is 53.345997, -6.302071; document is 53.36, -6.32` |
+| a well-formed claim with a signature the key did not make | `the signature is not this key's over this claim` |
+
+Anyone who can write the collection can still write a row. Only the courier
+can sign one. `checks/run.mjs` check 22 in the MVP verifies every courier
+that carries a public key, and skips rather than passes when no app has
+joined.
+
+Not covered: `state`. Two parties write it — the hub sets `assigned`, the app
+sets `available` — so a signature over it would break every time the hub
+touched the document. And a signed position could in principle be replayed
+verbatim; the hub sees how old each one is, which is how the tracker shows
+"5s old", but nothing rejects a stale one yet.
+
 ### 4. What the node saw
 
 <img src="docs/screenshots/4-node-log.png" width="360" alt="The node log: the local write, the sync push, then hub-1 and other nodes fetching the phone's new member">
@@ -201,7 +261,7 @@ The app talks to it at `http://127.0.0.1:7480` with the same calls the MVP's
 | 4 | `POST /api/sql SELECT restaurant_id, item_id, name, price_cents FROM menu_published`, cached a minute, to name the lines | the phone's node |
 | 5 | `POST /api/doc/update {_id, status: ready} $set {status: collected, collected_at}` | the phone's node |
 | 5 | `$set {status: delivered, delivered_at}`, then `couriers $set {state: available, current_order: null}` | the phone's node; platform-eu |
-| every 5 s | `couriers $set {location: {type: Point, coordinates}, updated_at}` | platform-eu, hub-1's API |
+| every 5 s | `couriers $set {location, updated_at, position_claim, position_sig}` — the claim signed by the keystore key | platform-eu, hub-1's API |
 
 Before a write the app fetches any member of the collection the node does not
 hold yet (`/api/files` + `/api/fetch`), as the MVP's `ensureLocal` does.
@@ -229,7 +289,8 @@ same network can query the phone's copy), 47800 sync, 47801 DHT.
 
 - arm64 only, Android 10+; the engine is a static Go binary, DuckDB is the musl build.
 - Position defaults to a simulated ride, because the demo's addresses are in Dublin. GPS mode is a switch away and uses the phone's real fixes.
-- Positions are not signed. The build sheet wants the courier app's key on `location` and `state`, verified by the hub; that is not built.
+- The signature covers the position, not `state`: the hub writes `state` too, so a signature over it would break on every dispatch. Nothing rejects a replayed position yet, though its age is visible.
+- The map's route comes from OSRM's public router; with no network it falls back to a straight line. Tiles are OpenStreetMap's, fine for a demo and not for a fleet of couriers.
 - Only the latest position is kept, on the courier document. A position history for analytics would be an event stream in its own table.
 - Until the menu table's members have landed, the names come through hub-1 (the node answers the query by asking its peers), and a pickup with no network would show item ids. Landing them needs unidatum after v2.367.0: the phone sees head-office and hub-1 at one address on two ports, and older engines kept only the first, unpublished one (fixed in peer-to-peer-db PR #1046).
 - One hub (`hub-1`) and the MVP's port numbers are constants in `Courier.kt`; only the host is editable in the app.
