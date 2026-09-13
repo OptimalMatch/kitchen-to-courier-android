@@ -7,9 +7,9 @@
 #   libmusl.so       musl's loader (ld-musl-aarch64.so.1), which runs libduckdb.so
 #   libstdcpp6.so, libgccs1.so   Alpine's libstdc++ and libgcc
 #   libduckwrap.so   a shell script: the engine's P2PFS_DUCKDB; runs the CLI through the loader
-# Usage: tools/fetch-natives.sh [unidatum version, default v2.367.0]
+# Usage: tools/fetch-natives.sh [unidatum version, default v2.368.0]
 set -euo pipefail
-V="${1:-v2.367.0}"; REPO="${UNIDATUM_REPO:-OptimalMatch/peer-to-peer-db}"
+V="${1:-v2.368.0}"; REPO="${UNIDATUM_REPO:-OptimalMatch/peer-to-peer-db}"
 DUCKDB_VERSION="${DUCKDB_VERSION:-v1.5.5}"; ALPINE="${ALPINE:-v3.21}"
 cd "$(dirname "$0")/.."
 J=app/src/main/jniLibs/arm64-v8a; mkdir -p "$J" tools/natives
