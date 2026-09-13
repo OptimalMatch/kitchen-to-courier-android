@@ -72,6 +72,7 @@ class MapActivity : AppCompatActivity() {
             map.overlays.add(me)
         }
         me!!.position = here
+        me!!.rotation = -courier.heading.toFloat()   // osmdroid turns the icon anticlockwise; a bearing turns clockwise
         if (o != null) {
             markOnce("pickup", o.optJSONObject("pickup"), R.drawable.pin_pickup)
             markOnce("delivery", o.optJSONObject("delivery"), R.drawable.pin_delivery)

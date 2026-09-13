@@ -52,7 +52,22 @@ class Courier private constructor(ctx: Context) {
      *  so reinstalling the app mid-ride does not teleport the courier back to the hub. */
     @Volatile var lon = prefs.getFloat("lon", HOME[0].toFloat()).toDouble()
     @Volatile var lat = prefs.getFloat("lat", HOME[1].toFloat()).toDouble()
-    private fun remember() { prefs.edit().putFloat("lon", lon.toFloat()).putFloat("lat", lat.toFloat()).apply() }
+    /** Which way the courier is facing, degrees clockwise from north. From the phone's own bearing in gps mode when it
+     *  has one, otherwise from the direction they just moved in — a courier is facing the way they are riding. */
+    @Volatile var heading = prefs.getFloat("heading", 0f).toDouble()
+    private fun remember() { prefs.edit().putFloat("lon", lon.toFloat()).putFloat("lat", lat.toFloat()).putFloat("heading", heading.toFloat()).apply() }
+
+    /** The bearing from where the courier was to where they are now, ignored below a metre so a standing courier does
+     *  not spin on rounding. */
+    private fun face(fromLon: Double, fromLat: Double) {
+        val mPerDegLat = 111_320.0; val mPerDegLon = mPerDegLat * Math.cos(Math.toRadians(lat))
+        val dx = (lon - fromLon) * mPerDegLon; val dy = (lat - fromLat) * mPerDegLat
+        if (Math.hypot(dx, dy) < 1.0) return
+        heading = (Math.toDegrees(Math.atan2(dx, dy)) + 360.0) % 360.0
+    }
+
+    /** The heading as a compass point, for a person to read. */
+    fun compass(): String = listOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")[(((heading + 22.5) % 360) / 45).toInt()]
     val location: JSONObject get() = JSONObject().put("type", "Point").put("coordinates", JSONArray().put(lon).put(lat))
     /** The cycling route to the point the courier is heading for: what the map draws and what the simulated ride follows,
      *  so the courier moves along streets. Refetched when the target changes; null when the router cannot be reached,
@@ -88,11 +103,17 @@ class Courier private constructor(ctx: Context) {
     @Volatile var publishError: String? = null
 
     /** A GPS fix from the phone (gps mode only). */
-    fun fix(newLon: Double, newLat: Double) { lon = newLon; lat = newLat; remember() }
+    fun fix(newLon: Double, newLat: Double, bearing: Double? = null) {
+        val wasLon = lon; val wasLat = lat
+        lon = newLon; lat = newLat
+        if (bearing != null) heading = (bearing + 360.0) % 360.0 else face(wasLon, wasLat)
+        remember()
+    }
 
     /** The simulated ride: one 5-second step toward where the order says to go — the pickup while ready, the customer once
      *  collected, nowhere when idle. Straight line at SIM_SPEED_MPS; a courier's route is the maps app's business. */
     fun rideStep(seconds: Double) {
+        val wasLon = lon; val wasLat = lat
         var budget = SIM_SPEED_MPS * seconds
         val pts = route?.points
         // Along the route when there is one: consume its points in order until the budget runs out, so the track on
@@ -106,13 +127,13 @@ class Courier private constructor(ctx: Context) {
                 if (d <= budget) { lon = p[0]; lat = p[1]; budget -= d; routeIdx++ }
                 else { stepToward(p[0], p[1], budget); budget = 0.0 }
             }
-            remember(); return
+            face(wasLon, wasLat); remember(); return
         }
         val t = target()
         val tLon = t?.get(0) ?: HOME[0]; val tLat = t?.get(1) ?: HOME[1]
         val d = metresTo(tLon, tLat)
         if (d <= budget) { lon = tLon; lat = tLat } else stepToward(tLon, tLat, budget)
-        remember()
+        face(wasLon, wasLat); remember()
     }
 
     private fun metresTo(toLon: Double, toLat: Double): Double {
@@ -133,7 +154,7 @@ class Courier private constructor(ctx: Context) {
      *  fields and checks the signature over it, so the claim cannot be re-pointed at another courier, another place
      *  or another moment without breaking. Six decimal places is about 10 cm, past what any fix is worth. */
     fun positionClaim(at: String): String =
-        "unidatum-courier-position/v1|$id|${"%.6f".format(java.util.Locale.ROOT, lon)}|${"%.6f".format(java.util.Locale.ROOT, lat)}|$at"
+        "unidatum-courier-position/v2|$id|${"%.6f".format(java.util.Locale.ROOT, lon)}|${"%.6f".format(java.util.Locale.ROOT, lat)}|${"%.1f".format(java.util.Locale.ROOT, heading)}|$at"
 
     /** The position onto the couriers document on platform-eu: what dispatch queries and what a customer app reads to
      *  draw the courier — signed by the key in the phone's keystore, so the hub can tell the courier's own claim from
@@ -143,7 +164,7 @@ class Courier private constructor(ctx: Context) {
             val at = now()
             val claim = positionClaim(at)
             hubEu.update("couriers", JSONObject().put("_id", id), JSONObject()
-                .put("location", location).put("updated_at", at)
+                .put("location", location).put("heading", Math.round(heading * 10) / 10.0).put("updated_at", at)
                 .put("position_claim", claim).put("position_sig", Keys.sign(claim)).put("key_alg", Keys.ALGORITHM))
             lastPublished = System.currentTimeMillis(); publishError = null
         } catch (e: Exception) { publishError = e.message }

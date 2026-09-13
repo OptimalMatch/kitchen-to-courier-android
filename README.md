@@ -135,7 +135,7 @@ computed from the same position.
 
 ### The map
 
-<img src="docs/screenshots/7-map.jpg" width="360" alt="The in-app map: OpenStreetMap tiles of Dublin, the courier's pin at Islandbridge, a cycling route along the quays to the pickup pin at Camden Street, 2.7 km and 8 minutes">
+<img src="docs/screenshots/7-map.jpg" width="360" alt="The in-app map: OpenStreetMap tiles of Dublin, the courier's arrow pointing east on Golden Lane, a cycling route to the pickup pin at Camden Street, 555 m and 4 minutes">
 
 Everything on this screen comes from two documents the phone already holds:
 the order, from its own node, and the position it writes itself. The map is
@@ -153,6 +153,13 @@ too, so nobody has to go back to the list mid-ride.
 The simulated ride follows the same polyline, which is why the track on the
 map runs along streets rather than through buildings.
 
+The courier is an arrow, not a dot, because the position carries a heading:
+the phone's own bearing in GPS mode, and the direction of travel otherwise.
+In the shot above the arrow points east along Golden Lane, and the document
+behind it read 100.1°. A customer app can point its courier icon the same
+way, and know the direction came from the courier rather than from whoever
+last wrote the row — the heading is inside the signed claim.
+
 ### Positions the hub can trust
 
 The build sheet asks for `location` and `state` to be "signed with the
@@ -166,7 +173,7 @@ can ask it to sign; it cannot copy it.
 Each position write carries the exact string it signed:
 
 ```
-unidatum-courier-position/v1|app-sm-s918u|-6.299816|53.345493|2026-09-13T02:18:15.278002Z
+unidatum-courier-position/v2|app-sm-s918u|-6.269742|53.341630|133.9|2026-09-13T02:44:15.361314Z
 ```
 
 and the public key sits on the courier's own document, so the hub verifies
@@ -181,6 +188,7 @@ Both tampering cases, run against the live fleet:
 |---|---|
 | another writer moved the position 2 km | `claim is 53.345997, -6.302071; document is 53.36, -6.32` |
 | a well-formed claim with a signature the key did not make | `the signature is not this key's over this claim` |
+| another writer turned the heading to 271° | `claim faces 81.3°, document says 271°` |
 
 Anyone who can write the collection can still write a row. Only the courier
 can sign one. `checks/run.mjs` check 22 in the MVP verifies every courier
@@ -261,7 +269,7 @@ The app talks to it at `http://127.0.0.1:7480` with the same calls the MVP's
 | 4 | `POST /api/sql SELECT restaurant_id, item_id, name, price_cents FROM menu_published`, cached a minute, to name the lines | the phone's node |
 | 5 | `POST /api/doc/update {_id, status: ready} $set {status: collected, collected_at}` | the phone's node |
 | 5 | `$set {status: delivered, delivered_at}`, then `couriers $set {state: available, current_order: null}` | the phone's node; platform-eu |
-| every 5 s | `couriers $set {location, updated_at, position_claim, position_sig}` — the claim signed by the keystore key | platform-eu, hub-1's API |
+| every 5 s | `couriers $set {location, heading, updated_at, position_claim, position_sig}` — the claim signed by the keystore key | platform-eu, hub-1's API |
 
 Before a write the app fetches any member of the collection the node does not
 hold yet (`/api/files` + `/api/fetch`), as the MVP's `ensureLocal` does.

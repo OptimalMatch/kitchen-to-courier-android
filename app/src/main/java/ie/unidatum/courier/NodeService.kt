@@ -86,7 +86,7 @@ class NodeService : Service() {
             logLine("position: gps mode needs the location permission; staying where the last fix or the ride left off"); return
         }
         val l = object : LocationListener {
-            override fun onLocationChanged(loc: Location) { c.fix(loc.longitude, loc.latitude) }
+            override fun onLocationChanged(loc: Location) { c.fix(loc.longitude, loc.latitude, if (loc.hasBearing()) loc.bearing.toDouble() else null) }
             @Deprecated("") override fun onStatusChanged(p: String?, s: Int, e: android.os.Bundle?) {}
             override fun onProviderEnabled(p: String) {}
             override fun onProviderDisabled(p: String) {}
