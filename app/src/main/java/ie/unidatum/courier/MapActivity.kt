@@ -1,6 +1,8 @@
 package ie.unidatum.courier
 
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -14,6 +16,8 @@ import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
+import org.osmdroid.views.Projection
+import org.osmdroid.views.overlay.Overlay
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
 import java.util.concurrent.Executors
@@ -26,6 +30,8 @@ import java.util.concurrent.Executors
  * renderer, not another source of truth. Collect and deliver are here too, so
  * the courier never has to go back to the list.
  */
+private const val PERIOD = 1500L
+
 class MapActivity : AppCompatActivity() {
     private lateinit var map: MapView
     private lateinit var courier: Courier
@@ -52,6 +58,7 @@ class MapActivity : AppCompatActivity() {
         map.setMultiTouchControls(true)
         map.controller.setZoom(15.0)
         map.controller.setCenter(GeoPoint(courier.lat, courier.lon))
+        map.overlays.add(Pulse())   // under the markers: they are added later
         map.setOnTouchListener { _, _ -> follow = false; findViewById<Button>(R.id.recentre).text = "Follow me"; false }
         findViewById<Button>(R.id.recentre).setOnClickListener {
             follow = true; (it as Button).text = "Following"; map.controller.animateTo(GeoPoint(courier.lat, courier.lon))
@@ -68,7 +75,14 @@ class MapActivity : AppCompatActivity() {
         val o = order()
         val here = GeoPoint(courier.lat, courier.lon)
         if (me == null) {
-            me = Marker(map).apply { title = courier.id; setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER); icon = getDrawable(R.drawable.pin_me) }
+            me = Marker(map).apply {
+                title = courier.id
+                // The chevron, not the image centre, sits on the courier: the cone above it is where they are
+                // looking, and anchoring on the middle of the whole icon would push the courier backwards by
+                // half a cone.
+                setAnchor(0.5f, 0.68f)
+                icon = getDrawable(R.drawable.pin_me)
+            }
             map.overlays.add(me)
         }
         me!!.position = here
@@ -95,7 +109,7 @@ class MapActivity : AppCompatActivity() {
             val status = o.optString("status")
             val d = courier.metresToTarget(o)
             val eta = courier.route?.let { if (it.seconds > 0) " · ${Math.round(it.seconds / 60)} min by bike" else "" } ?: ""
-            findViewById<TextView>(R.id.mapTitle).text = "${o.optString("_id")} · $status"
+            findViewById<TextView>(R.id.mapTitle).text = "${o.optString("_id")} · $status" + (if (courier.moving()) " · moving ${courier.compass()}" else " · stopped")
             findViewById<TextView>(R.id.mapWhere).text =
                 (if (status == "ready") "to the pickup · " + (o.optJSONObject("pickup")?.optString("address") ?: "")
                  else "to the customer · " + (o.optJSONObject("delivery")?.optString("address") ?: "")) +
@@ -145,7 +159,35 @@ class MapActivity : AppCompatActivity() {
         }
     }
 
-    override fun onResume() { super.onResume(); map.onResume() }
-    override fun onPause() { super.onPause(); map.onPause() }
+    /** The rings under the courier while they are actually moving — a signal a person reads without looking, the way
+     *  a blinking cursor says a terminal is alive. Nothing animates when the courier is standing still or their phone
+     *  has gone quiet, so the animation carries information rather than decorating the screen. */
+    private inner class Pulse : Overlay() {
+        private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+        override fun draw(c: Canvas, proj: Projection) {
+            if (!courier.moving()) return
+            val p = proj.toPixels(GeoPoint(courier.lat, courier.lon), null)
+            val t = (System.currentTimeMillis() % PERIOD).toFloat() / PERIOD
+            for (k in 0..1) {
+                val phase = (t + k * 0.5f) % 1f
+                paint.color = Color.parseColor("#2F7D4F")
+                paint.alpha = ((1f - phase) * (1f - phase) * 130).toInt()
+                paint.strokeWidth = 2f + 7f * (1f - phase)
+                c.drawCircle(p.x.toFloat(), p.y.toFloat(), 22f + phase * 68f, paint)
+            }
+        }
+    }
+
+    private val beat = object : Runnable {
+        override fun run() {
+            if (!alive || !resumed) return
+            if (courier.moving()) map.invalidate()
+            ui.postDelayed(this, 40)
+        }
+    }
+
+    @Volatile private var resumed = false
+    override fun onResume() { super.onResume(); map.onResume(); resumed = true; ui.post(beat) }
+    override fun onPause() { super.onPause(); map.onPause(); resumed = false }
     override fun onDestroy() { alive = false; work.shutdownNow(); super.onDestroy() }
 }

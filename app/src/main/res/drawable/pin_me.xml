@@ -1,5 +1,19 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="34dp" android:height="34dp" android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#FFFFFFFF" android:pathData="M12,1.4a10.6,10.6 0 1,1 0,21.2a10.6,10.6 0 0,1 0,-21.2z"/>
-    <path android:fillColor="#FF2F7D4F" android:pathData="M12,2.8a9.2,9.2 0 1,1 0,18.4a9.2,9.2 0 0,1 0,-18.4z"/>
-    <path android:fillColor="#FFFFFFFF" android:pathData="M12,5.2L16.6,16.4L12,13.9L7.4,16.4z"/>
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The courier: a chevron with the cone of where they are facing, the shape a
+  person already reads as "me, going that way" from every navigation app. It
+  is deliberately not a disc or a teardrop — the pickup and the customer are
+  teardrops, and when the courier arrives on top of one the two must still
+  read as two things.
+
+  Drawn facing north; the map turns it by the courier's heading. The anchor
+  sits on the chevron, not on the image centre, so the cone projects ahead of
+  the courier's actual position instead of dragging it forward.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="46dp" android:height="46dp" android:viewportWidth="48" android:viewportHeight="48">
+    <path android:fillColor="#2F7D4F" android:fillAlpha="0.22" android:pathData="M24,31 L10.5,8.5 Q24,1.5 37.5,8.5 Z"/>
+    <path android:fillColor="#2F7D4F" android:fillAlpha="0.34" android:pathData="M24,31 L16,13 Q24,10 32,13 Z"/>
+    <path android:fillColor="#2F7D4F" android:strokeColor="#FFFFFF" android:strokeWidth="2.6"
+        android:strokeLineJoin="round" android:pathData="M24,21.5 L33.5,41 L24,35.6 L14.5,41 Z"/>
 </vector>
