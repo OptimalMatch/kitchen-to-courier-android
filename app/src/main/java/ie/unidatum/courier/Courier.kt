@@ -22,8 +22,9 @@ class Courier private constructor(ctx: Context) {
         @Volatile private var one: Courier? = null
         /** One courier per process: the activity and the service share its state (position, the orders last read). */
         fun get(ctx: Context): Courier = one ?: synchronized(this) { one ?: Courier(ctx.applicationContext).also { one = it } }
-        /** Where the app starts the courier in the demo: hub-1's pickup area, so dispatch's $near finds it first. */
-        val HOME = doubleArrayOf(-6.32, 53.35)
+        /** Only a fallback: the hub's real address comes from the platform (the hubs collection), and the courier
+         *  waits at it between deliveries. This constant is what to do when the platform has not been asked yet. */
+        val HOME = doubleArrayOf(-6.2783, 53.3372)
         const val SIM_SPEED_MPS = 8.0   // about 29 km/h, a brisk e-bike; the demo's clock
     }
     val prefs = ctx.getSharedPreferences("courier", Context.MODE_PRIVATE)
@@ -52,6 +53,27 @@ class Courier private constructor(ctx: Context) {
      *  so reinstalling the app mid-ride does not teleport the courier back to the hub. */
     @Volatile var lon = prefs.getFloat("lon", HOME[0].toFloat()).toDouble()
     @Volatile var lat = prefs.getFloat("lat", HOME[1].toFloat()).toDouble()
+    /** Where this courier's hub is, as the platform publishes it. Learnt once and kept, so a courier who loses the
+     *  network still knows where to wait. */
+    var homeLon: Double
+        get() = prefs.getFloat("homeLon", HOME[0].toFloat()).toDouble()
+        private set(v) { prefs.edit().putFloat("homeLon", v.toFloat()).apply() }
+    var homeLat: Double
+        get() = prefs.getFloat("homeLat", HOME[1].toFloat()).toDouble()
+        private set(v) { prefs.edit().putFloat("homeLat", v.toFloat()).apply() }
+    @Volatile var homeAddress: String = ""
+    fun home() = doubleArrayOf(homeLon, homeLat)
+
+    /** Ask the platform where the hub is. Cheap, and only on the way in. */
+    fun refreshHub() {
+        try {
+            val h = hubEu.find("hubs", JSONObject().put("_id", hubId), 1).firstOrNull() ?: return
+            val c = h.optJSONObject("location")?.optJSONArray("coordinates") ?: return
+            homeLon = c.optDouble(0); homeLat = c.optDouble(1); homeAddress = h.optString("address")
+            NodeService.logLine("hub $hubId is at ${h.optString("address")}")
+        } catch (e: Exception) { NodeService.logLine("hub: ${e.message}") }
+    }
+
     /** Which way the courier is facing, degrees clockwise from north. From the phone's own bearing in gps mode when it
      *  has one, otherwise from the direction they just moved in — a courier is facing the way they are riding. */
     @Volatile var heading = prefs.getFloat("heading", 0f).toDouble()
@@ -72,6 +94,21 @@ class Courier private constructor(ctx: Context) {
      *  waiting at a door, or one whose phone has stopped reporting, is not moving and should not look like it. */
     @Volatile var lastMoveAt = 0L
     fun moving(): Boolean = System.currentTimeMillis() - lastMoveAt < 8000
+
+    /** Put the courier at the end of the leg they are riding — the pickup, the customer, or the hub area when there is
+     *  no order. A simulation control, and only useful because the ride is simulated: a real courier arrives by
+     *  riding. It exists so the flow can be shown without waiting out eight minutes of Dublin traffic. */
+    fun skipRide(): String {
+        val t = target() ?: home()
+        val was = metresTo(t[0], t[1])
+        val fromLon = lon; val fromLat = lat
+        lon = t[0]; lat = t[1]
+        face(fromLon, fromLat)
+        route = null; routeKey = ""; routeIdx = 0
+        lastMoveAt = System.currentTimeMillis()
+        remember()
+        return "skipped ${Math.round(was)} m to ${if (target() == null) "the hub area" else "the destination"}"
+    }
 
     /** The heading as a compass point, for a person to read. */
     fun compass(): String = listOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")[(((heading + 22.5) % 360) / 45).toInt()]
@@ -98,7 +135,7 @@ class Courier private constructor(ctx: Context) {
         val t = target()
         // No order: the courier rides back to the hub's area, and that leg needs a route as much as a delivery does.
         // Without one the ride went straight and crossed the city through buildings and the river — a courier flying.
-        val to = t ?: HOME
+        val to = t ?: home()
         val key = if (o == null || t == null) "home" else "${o.optString("_id")}|${o.optString("status")}"
         if (metresTo(to[0], to[1]) < 30) { route = null; routeKey = "$key|arrived"; routeIdx = 0; return }
         if (key == routeKey && route != null) return
@@ -141,7 +178,7 @@ class Courier private constructor(ctx: Context) {
             face(wasLon, wasLat); remember(); return
         }
         val t = target()
-        val tLon = t?.get(0) ?: HOME[0]; val tLat = t?.get(1) ?: HOME[1]
+        val tLon = t?.get(0) ?: homeLon; val tLat = t?.get(1) ?: homeLat
         val d = metresTo(tLon, tLat)
         if (d <= budget) { lon = tLon; lat = tLat } else stepToward(tLon, tLat, budget)
         face(wasLon, wasLat); remember()
@@ -202,6 +239,7 @@ class Courier private constructor(ctx: Context) {
 
     /** One couriers document on platform-eu, near hub-1's pickup so dispatch's $near finds it. */
     fun register(): String {
+        refreshHub()
         val eu = hubEu
         val mine = eu.find("couriers", JSONObject().put("_id", id), 1).firstOrNull()
         if (mine == null) {
