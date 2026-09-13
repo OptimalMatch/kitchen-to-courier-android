@@ -1,17 +1,109 @@
 # Kitchen to Courier — the courier's phone as a node
 
-An Android courier app for the [kitchen-to-courier](https://www.unidatum.ie/en/blog/architecture-kitchen-to-courier)
-architecture. The phone is not a client of a server: it runs a unidatum node
-of the platform's shared library (`chain-platform-shared`), holds its own copy
-of `platform_orders`, reads and writes it locally, and syncs with the hub.
-Dispatch on the hub assigns it orders the same way it assigns the simulated
-couriers; Collected and Delivered are local writes that reach the hub on the
-next sync (measured: under two seconds).
+An Android courier app for the
+[kitchen-to-courier](https://www.unidatum.ie/en/blog/architecture-kitchen-to-courier)
+architecture, built to show one thing: **the phone is not a client of a
+server. It is a node.**
 
-It joins the fleet of
-[kitchen-to-courier-mvp](https://github.com/OptimalMatch/kitchen-to-courier-mvp)
-(branch `phone-courier` publishes hub-1's shared sync port and keeps the
-simulated couriers off the phone's orders).
+## What it is for
+
+In the architecture, a restaurant chain and a delivery platform share one
+library, `chain-platform-shared`, in which `platform_orders` lives. The
+chain's kitchens write to it (accepted, ready), the platform's hubs write to
+it (which courier), and the couriers write to it (collected, delivered). No
+one owns the database; every party runs a node and holds a copy of what it
+needs. The [MVP](https://github.com/OptimalMatch/kitchen-to-courier-mvp)
+runs that as seven nodes in Docker with the apps simulated in JavaScript.
+
+This app replaces one of the simulated couriers with a real phone. It
+bundles the unidatum engine and runs a node of the shared library inside
+the app. When the courier taps Collected, that is a write to the copy of
+`platform_orders` on the phone. The hub learns about it on the next sync,
+and from the hub the kitchen, the head office and the analytics node learn
+about it in turn. If the phone loses the network, the courier still sees
+the orders and the taps still land; they reach the hub when it is back.
+
+Dispatch on the hub does not know the phone is different. The app registers
+a `couriers` document on the platform's own library at hub-1's pickup point,
+and the hub's dispatch rule, a geo query for the nearest available courier,
+finds it the same way it finds the simulated ones.
+
+## In action
+
+The run below is against the MVP fleet (branch `main` after its PR #1) on
+unidatum v2.367.0, with the phone, a Galaxy S23 Ultra, on the same Tailscale
+network as the machine running compose.
+
+### 1. Joined and waiting
+
+<img src="docs/screenshots/1-idle.png" width="360" alt="The app idle: node status, hub-1 sees me available, no orders">
+
+The node is up inside the app: `courier-sm-s918u`, engine v2.367.0, a member
+of `chain-platform-shared`, holding 246 files (the members of
+`platform_orders` it has replicated) and peered with 7 nodes (hub-1 and,
+through it, the rest of the fleet). "hub-1 sees me: available" is read from
+the platform's `couriers` collection on hub-1's other library. Nothing has
+been dispatched.
+
+### 2. Dispatched
+
+<img src="docs/screenshots/2-ready.png" width="360" alt="An order dispatched to the phone, status ready, a Collected button">
+
+A customer placed an order (`sims/customer.mjs`), restaurant r1's kitchen
+accepted it and marked it ready, and hub-1's dispatch assigned it to the
+nearest available courier: the phone. The hub wrote `courier_id` on the
+order and `state: assigned` on the courier document. The phone's node pulled
+the new member on its 5-second sync, the app's 3-second poll of its own node
+found an order with its id, and the card appeared. Dispatch to on-phone here
+took about a second; the hub's log line for it was
+`hub-1: o-live-mtz4n4iz-0 -> app-sm-s918u`.
+
+### 3. Collected
+
+<img src="docs/screenshots/3-collected.png" width="360" alt="The order after Collected: status collected, a Delivered button">
+
+The courier tapped Collected. The app ran one update on the node in the
+phone: `{_id, status: ready} $set {status: collected, collected_at}`. The
+status pill changed from the phone's own read. hub-1 saw the change 1.4 s
+later (measured by polling hub-1's API from the host until the document
+changed). Delivered is the same shape and also sets the courier document
+back to `available` on the platform; it reached hub-1 in 1.5 to 2.0 s
+across the runs.
+
+### 4. What the node saw
+
+<img src="docs/screenshots/4-node-log.png" width="360" alt="The node log: the local write, the sync push, then hub-1 and other nodes fetching the phone's new member">
+
+The app's log panel shows the engine's own output. Reading down from
+`collected o-live-mtz4n4iz-0`:
+
+- `sync 100.67.6.34:17811: sent 1, got 0` — the phone pushed the one
+  operation (its commit) to hub-1's shared node.
+- `seeding platform_orders.collection.delta.parquet to 100.67.6.34:…` — the
+  hub, and then five other nodes of the fleet (the different node ids in the
+  `secure connection from` lines), came to the phone for the member that
+  commit added. The phone is serving the fleet, not only consuming.
+- `merged 1 op(s), rejected 0` — a commit from the hub side arriving on the
+  phone, the dispatch's write.
+- `punch: probing restaurant-1 at 100.67.6.34:47810` — the phone learned the
+  other nodes' addresses from the hub, but only hub-1's shared port is
+  published on the host, so those probes get no answer. The data still
+  flows, through hub-1.
+
+The order as hub-1 holds it afterwards, every field written by a different
+party:
+
+```
+status:        delivered
+courier_id:    app-sm-s918u
+ready_at:      2026-09-13T01:20:29.330Z     kitchen r1
+dispatched_at: 2026-09-13T01:20:30.088Z     hub-1 dispatch
+collected_at:  2026-09-13T01:20:51.460954Z  the phone
+delivered_at:  2026-09-13T01:21:18.396424Z  the phone
+```
+
+and hub-1's peer table lists the phone by the address it really has:
+`courier-sm-s918u 100.107.235.10 47800`.
 
 ## What is in the APK
 
@@ -25,7 +117,8 @@ simulated couriers off the phone's orders).
 
 Android runs a native executable an app ships only from the app's own
 native-library directory, and the packager takes only `lib*.so` names —
-hence the names, and `patchelf` rewriting the DT_NEEDED entries to match.
+hence the names, and `patchelf` rewriting the DT_NEEDED entries to match,
+including the transitive ones (libstdc++ asks for libgcc_s by name).
 `tools/fetch-natives.sh` produces all six (gh access to the release repo,
 `patchelf`, `curl`). They are 106 MB and stay out of git.
 
@@ -56,12 +149,13 @@ JAVA_HOME=~/jdk/jdk17 ANDROID_HOME=~/android-sdk ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-On the MVP side, on branch `phone-courier`: `bin/demo-up.sh`, then set the
-hub host in the app to the machine running compose (a Tailscale or LAN
-address the phone reaches). Place orders with
-`docker compose run --rm tools node sims/customer.mjs`; the nearest available
-courier to hub-1's pickup is the phone, so dispatch assigns them to it and
-they appear on the phone with a Collected button.
+Or install the APK from the [releases](../../releases).
+
+On the MVP side: `bin/demo-up.sh`, then set the hub host in the app to the
+machine running compose (a Tailscale or LAN address the phone reaches).
+Place orders with `docker compose run --rm tools node sims/customer.mjs`;
+the nearest available courier to hub-1's pickup is the phone, so dispatch
+assigns them to it and they appear on the phone with a Collected button.
 
 Ports on the phone: 7480 (API, bound on all interfaces so a laptop on the
 same network can query the phone's copy), 47800 sync, 47801 DHT.
@@ -71,4 +165,5 @@ same network can query the phone's copy), 47800 sync, 47801 DHT.
 - arm64 only, Android 10+; the engine is a static Go binary, DuckDB is the musl build.
 - The courier's location is fixed at hub-1's pickup; a real app would write GPS fixes to its `couriers` document.
 - One hub (`hub-1`) and the MVP's port numbers are constants in `Courier.kt`; only the host is editable in the app.
-- The debug build only. A release build needs a signing key and `minifyEnabled false` is assumed (no ProGuard rules written).
+- The phone reaches the rest of the fleet only through hub-1, since only hub-1's shared port is published by compose.
+- The debug build only. A release build needs a signing key; no ProGuard rules are written.
