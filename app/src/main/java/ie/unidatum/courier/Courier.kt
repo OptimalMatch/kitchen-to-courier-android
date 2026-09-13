@@ -96,12 +96,15 @@ class Courier private constructor(ctx: Context) {
     fun refreshRoute() {
         val o = lastOrders.sortedBy { it.optString("ready_at") }.firstOrNull()
         val t = target()
-        if (o == null || t == null) { route = null; routeKey = ""; routeIdx = 0; return }
-        val key = "${o.optString("_id")}|${o.optString("status")}"
+        // No order: the courier rides back to the hub's area, and that leg needs a route as much as a delivery does.
+        // Without one the ride went straight and crossed the city through buildings and the river — a courier flying.
+        val to = t ?: HOME
+        val key = if (o == null || t == null) "home" else "${o.optString("_id")}|${o.optString("status")}"
+        if (metresTo(to[0], to[1]) < 30) { route = null; routeKey = "$key|arrived"; routeIdx = 0; return }
         if (key == routeKey && route != null) return
-        val leg = Route.cycling(lon, lat, t[0], t[1])
+        val leg = Route.cycling(lon, lat, to[0], to[1])
         route = leg; routeKey = key; routeIdx = 0
-        NodeService.logLine(if (leg == null) "route: none, riding straight" else "route: ${Math.round(leg.metres)} m, ${Math.round(leg.seconds / 60)} min by bike")
+        NodeService.logLine(if (leg == null) "route: none, riding straight" else "route to ${if (key == "home") "the hub" else "the order"}: ${Math.round(leg.metres)} m, ${Math.round(leg.seconds / 60)} min by bike")
     }
 
     /** The orders as last read, for the ride to know where it is going. */
@@ -127,6 +130,7 @@ class Courier private constructor(ctx: Context) {
         // the map follows streets. Without a route (no order, or the router unreachable) head straight for the target
         // — the order's next point, or the hub's area, which is where a courier waits between deliveries and where
         // dispatch looks for the nearest one.
+        if (pts != null && routeIdx >= pts.size) { routeKey = ""; route = null }   // consumed: ask for the next leg
         if (pts != null && routeIdx < pts.size) {
             while (routeIdx < pts.size && budget > 0) {
                 val p = pts[routeIdx]

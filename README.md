@@ -151,7 +151,16 @@ the phone's maps app for turn-by-turn, and Collected and Delivered are here
 too, so nobody has to go back to the list mid-ride.
 
 The simulated ride follows the same polyline, which is why the track on the
-map runs along streets rather than through buildings.
+map runs along streets rather than through buildings — including the leg with
+no order on it. When a delivery is done the courier rides back toward the hub
+area, which is where dispatch looks for the nearest courier, and that leg is
+routed like any other. Before it was, the courier went in a straight line and
+crossed the city through buildings and the river.
+
+<img src="docs/screenshots/9-home.jpg" width="360" alt="The map with no order in hand: the courier at Portobello riding back to the hub area, the route running through the Liberties and along the quays past Islandbridge">
+
+The Orders button goes back to the list, and the map is reachable from the
+list with no order in hand too, which is the only way to watch that leg.
 
 The courier is a chevron with a cone, not a dot, because the position carries
 a heading: the phone's own bearing in GPS mode, and the direction of travel

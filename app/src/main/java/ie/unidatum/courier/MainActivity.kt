@@ -50,6 +50,8 @@ class MainActivity : AppCompatActivity() {
             courier.joined = false; courier.registered = false
             toast("hub set to ${courier.hubHost}; rejoining")
         }
+        // The map is worth reaching with no order in hand too: it is where the ride back to the hub area is visible.
+        findViewById<Button>(R.id.openMap).setOnClickListener { startActivity(android.content.Intent(this, MapActivity::class.java)) }
         findViewById<Button>(R.id.restartNode).setOnClickListener {
             NodeService.stop(this); courier.joined = false; courier.registered = false
             ui.postDelayed({ NodeService.start(this) }, 1500)
