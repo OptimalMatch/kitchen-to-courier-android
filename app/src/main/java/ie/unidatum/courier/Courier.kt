@@ -17,7 +17,15 @@ import java.time.Instant
  */
 data class MenuItem(val name: String, val priceCents: Long)
 
-class Courier(ctx: Context) {
+class Courier private constructor(ctx: Context) {
+    companion object {
+        @Volatile private var one: Courier? = null
+        /** One courier per process: the activity and the service share its state (position, the orders last read). */
+        fun get(ctx: Context): Courier = one ?: synchronized(this) { one ?: Courier(ctx.applicationContext).also { one = it } }
+        /** Where the app starts the courier in the demo: hub-1's pickup area, so dispatch's $near finds it first. */
+        val HOME = doubleArrayOf(-6.32, 53.35)
+        const val SIM_SPEED_MPS = 8.0   // about 29 km/h, a brisk e-bike; the demo's clock
+    }
     val prefs = ctx.getSharedPreferences("courier", Context.MODE_PRIVATE)
     var hubHost: String
         get() = prefs.getString("hubHost", "100.67.6.34")!!
@@ -25,6 +33,10 @@ class Courier(ctx: Context) {
     val hubSyncPort get() = prefs.getInt("hubSyncPort", 17811)
     val hubEuPort get() = prefs.getInt("hubEuPort", 17520)
     val hubId = "hub-1"
+    /** "sim" (default: the ride is simulated at SIM_SPEED_MPS toward the pickup, then the customer) or "gps" (the phone's fixes). */
+    var locationMode: String
+        get() = prefs.getString("locMode", "sim")!!
+        set(v) { prefs.edit().putString("locMode", v).apply() }
     /** The courier's id: app-<model>. The MVP's simulated couriers are hub-N-cNN; the sim leaves other ids' orders alone. */
     val id: String = "app-" + android.os.Build.MODEL.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
     val local = Api("http://127.0.0.1:${NodeService.UI_PORT}")
@@ -36,8 +48,55 @@ class Courier(ctx: Context) {
 
     fun now(): String = Instant.now().toString()
 
-    /** Where the courier is: fixed at hub-1's pickup point in this demo (no GPS); what the couriers document carries. */
-    val location: JSONObject get() = JSONObject().put("type", "Point").put("coordinates", JSONArray().put(-6.32).put(53.35))
+    /** Where the courier is now, [lon, lat]: the simulated ride's point or the last GPS fix. Kept across restarts,
+     *  so reinstalling the app mid-ride does not teleport the courier back to the hub. */
+    @Volatile var lon = prefs.getFloat("lon", HOME[0].toFloat()).toDouble()
+    @Volatile var lat = prefs.getFloat("lat", HOME[1].toFloat()).toDouble()
+    private fun remember() { prefs.edit().putFloat("lon", lon.toFloat()).putFloat("lat", lat.toFloat()).apply() }
+    val location: JSONObject get() = JSONObject().put("type", "Point").put("coordinates", JSONArray().put(lon).put(lat))
+    /** The orders as last read, for the ride to know where it is going. */
+    @Volatile var lastOrders: List<JSONObject> = emptyList()
+    @Volatile var lastPublished = 0L
+    @Volatile var publishError: String? = null
+
+    /** A GPS fix from the phone (gps mode only). */
+    fun fix(newLon: Double, newLat: Double) { lon = newLon; lat = newLat; remember() }
+
+    /** The simulated ride: one 5-second step toward where the order says to go — the pickup while ready, the customer once
+     *  collected, nowhere when idle. Straight line at SIM_SPEED_MPS; a courier's route is the maps app's business. */
+    fun rideStep(seconds: Double) {
+        val o = lastOrders.sortedBy { it.optString("ready_at") }.firstOrNull()
+        // With an order: the pickup while it is ready, the customer once collected. Without one: back toward the hub's
+        // area, which is where a courier waits between deliveries — and where dispatch looks for the nearest one.
+        val to = o?.let { (if (it.optString("status") == "ready") it.optJSONObject("pickup") else it.optJSONObject("delivery"))?.optJSONObject("location")?.optJSONArray("coordinates") }
+        val tLon = to?.optDouble(0) ?: HOME[0]; val tLat = to?.optDouble(1) ?: HOME[1]
+        val mPerDegLat = 111_320.0; val mPerDegLon = mPerDegLat * Math.cos(Math.toRadians(lat))
+        val dx = (tLon - lon) * mPerDegLon; val dy = (tLat - lat) * mPerDegLat
+        val dist = Math.hypot(dx, dy)
+        val step = SIM_SPEED_MPS * seconds
+        if (dist <= step) { lon = tLon; lat = tLat } else {
+            lon += dx / dist * step / mPerDegLon
+            lat += dy / dist * step / mPerDegLat
+        }
+        remember()
+    }
+
+    /** The position onto the couriers document on platform-eu: what dispatch queries and what a customer app reads to
+     *  draw the courier. Latest wins; a missed write is a missed position, nothing to queue. */
+    fun publishLocation() {
+        try {
+            hubEu.update("couriers", JSONObject().put("_id", id), JSONObject().put("location", location).put("updated_at", now()))
+            lastPublished = System.currentTimeMillis(); publishError = null
+        } catch (e: Exception) { publishError = e.message }
+    }
+
+    /** Metres from the courier to the point on the order it is heading for, for the card. */
+    fun metresToTarget(o: JSONObject): Double? {
+        val to = (if (o.optString("status") == "ready") o.optJSONObject("pickup") else o.optJSONObject("delivery"))
+            ?.optJSONObject("location")?.optJSONArray("coordinates") ?: return null
+        val mPerDegLat = 111_320.0; val mPerDegLon = mPerDegLat * Math.cos(Math.toRadians(lat))
+        return Math.hypot((to.optDouble(0) - lon) * mPerDegLon, (to.optDouble(1) - lat) * mPerDegLat)
+    }
 
     /** Peer with the hub's shared node and follow the orders collection. Idempotent. */
     fun join(): String {
@@ -69,7 +128,9 @@ class Courier(ctx: Context) {
     /** Orders dispatched to me that are not delivered yet, read from the phone's own copy. */
     fun myOrders(): List<JSONObject> {
         local.ensureLocal("platform_orders.")
-        return local.find("platform_orders", JSONObject().put("courier_id", id).put("status", JSONObject().put("\$in", JSONArray().put("ready").put("collected"))), 20)
+        val o = local.find("platform_orders", JSONObject().put("courier_id", id).put("status", JSONObject().put("\$in", JSONArray().put("ready").put("collected"))), 20)
+        lastOrders = o
+        return o
     }
 
     fun collected(orderId: String) {

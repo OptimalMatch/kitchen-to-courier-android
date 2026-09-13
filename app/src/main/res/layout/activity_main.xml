@@ -6,6 +6,7 @@
     <TextView android:id="@+id/courierId" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="26sp" android:textStyle="bold" android:textColor="@color/ink" android:fontFamily="serif"/>
     <TextView android:id="@+id/nodeStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:textColor="@color/muted" android:fontFamily="monospace" android:layout_marginTop="4dp" android:text="node: starting"/>
     <TextView android:id="@+id/hubSeen" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:textColor="@color/muted" android:fontFamily="monospace"/>
+    <TextView android:id="@+id/position" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:textColor="@color/muted" android:fontFamily="monospace"/>
 
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="MY ORDERS" android:textSize="11sp" android:letterSpacing="0.12" android:textColor="@color/muted" android:layout_marginTop="20dp"/>
     <TextView android:id="@+id/empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Nothing dispatched to you yet. Dispatch on hub-1 assigns the nearest available courier when a kitchen marks an order ready." android:textColor="@color/muted" android:layout_marginTop="8dp"/>
@@ -17,6 +18,7 @@
         <Button android:id="@+id/saveHub" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Rejoin" android:layout_marginStart="8dp"/>
     </LinearLayout>
     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="sync 17811 · platform-eu API 17520 · this phone is a node of chain-platform-shared" android:textSize="11sp" android:textColor="@color/muted" android:fontFamily="monospace"/>
+    <Switch android:id="@+id/gpsMode" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Position from GPS (off: a simulated ride to the pickup, then the customer)" android:textSize="13sp" android:layout_marginTop="8dp"/>
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="8dp">
         <Button android:id="@+id/restartNode" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Restart node"/>
         <Button android:id="@+id/toggleLog" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Node log" android:layout_marginStart="8dp"/>

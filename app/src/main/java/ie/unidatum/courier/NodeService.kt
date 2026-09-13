@@ -7,7 +7,12 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import java.io.File
 import java.util.concurrent.atomic.AtomicReference
@@ -42,9 +47,51 @@ class NodeService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(1, notification())
+        // Data-sync always; the location type only once the person has granted the permission (Android 14+ refuses it otherwise).
+        val hasLoc = checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val type = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC or
+            (if (hasLoc) android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0)
+        startForeground(1, notification(), type)
         if (!running()) Thread { run() }.start()
+        if (!positionLoop) { positionLoop = true; Thread { positions() }.start() }
         return START_STICKY
+    }
+
+    @Volatile private var positionLoop = false
+    private var gps: LocationListener? = null
+
+    /** Every 5 s: where the courier is, onto the couriers document. Simulated by default — the ride moves toward the order's
+     *  next point — or the phone's GPS fixes when the mode says so. Runs as long as the service does, screen off included. */
+    private fun positions() {
+        val c = Courier.get(this)
+        var mode = ""
+        while (positionLoop) {
+            try {
+                if (c.locationMode != mode) { mode = c.locationMode; setGps(mode == "gps", c) ; logLine("position: $mode") }
+                if (mode == "sim") { if (c.joined) try { c.myOrders() } catch (_: Exception) {}; c.rideStep(5.0) }
+                if (c.registered) c.publishLocation()
+            } catch (e: Exception) { logLine("position: ${e.message}") }
+            Thread.sleep(5000)
+        }
+    }
+
+    private fun setGps(on: Boolean, c: Courier) {
+        val lm = getSystemService(LocationManager::class.java)
+        gps?.let { lm.removeUpdates(it); gps = null }
+        if (!on) return
+        if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            logLine("position: gps mode needs the location permission; staying where the last fix or the ride left off"); return
+        }
+        val l = object : LocationListener {
+            override fun onLocationChanged(loc: Location) { c.fix(loc.longitude, loc.latitude) }
+            @Deprecated("") override fun onStatusChanged(p: String?, s: Int, e: android.os.Bundle?) {}
+            override fun onProviderEnabled(p: String) {}
+            override fun onProviderDisabled(p: String) {}
+        }
+        gps = l
+        Handler(Looper.getMainLooper()).post {
+            try { lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 5000L, 0f, l) } catch (e: Exception) { logLine("position: gps: ${e.message}") }
+        }
     }
 
     private fun run() {
@@ -77,6 +124,8 @@ class NodeService : Service() {
     }
 
     override fun onDestroy() {
+        positionLoop = false
+        gps?.let { getSystemService(LocationManager::class.java).removeUpdates(it) }
         process.get()?.destroy(); process.set(null)
         super.onDestroy()
     }

@@ -10,7 +10,7 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import org.json.JSONObject
 
-class OrdersAdapter(val onCollected: (String) -> Unit, val onDelivered: (String) -> Unit, val myLocation: () -> JSONObject?) : RecyclerView.Adapter<OrdersAdapter.VH>() {
+class OrdersAdapter(val onCollected: (String) -> Unit, val onDelivered: (String) -> Unit, val myLocation: () -> JSONObject?, val distance: (JSONObject) -> Double?) : RecyclerView.Adapter<OrdersAdapter.VH>() {
     private var items: List<JSONObject> = emptyList()
     private var menu: Map<String, MenuItem> = emptyMap()
     fun submit(o: List<JSONObject>, m: Map<String, MenuItem>) { items = o.sortedBy { it.optString("ready_at") }; menu = m; notifyDataSetChanged() }
@@ -58,6 +58,9 @@ class OrdersAdapter(val onCollected: (String) -> Unit, val onDelivered: (String)
         // To the pickup from where the courier is (the position the app registered; a real app would use GPS), then to the customer from the pickup.
         val from = if (status == "ready") myLocation() else pickup
         route.text = if (status == "ready") "Route to pickup" else "Route to customer"
+        val d = distance(o)
+        h.itemView.findViewById<TextView>(R.id.distance).text = if (d == null) "" else
+            (if (status == "ready") "to the pickup  " else "to the customer  ") + (if (d >= 1000) "%.1f km".format(d / 1000) else "${d.toInt()} m")
         route.isEnabled = to != null
         route.setOnClickListener {
             val ctx = h.itemView.context

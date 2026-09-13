@@ -10,6 +10,7 @@
     <TextView android:id="@+id/orderItems" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="14sp" android:textColor="@color/ink" android:layout_marginTop="4dp"/>
     <TextView android:id="@+id/pickup" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="13sp" android:textColor="@color/ink" android:layout_marginTop="8dp"/>
     <TextView android:id="@+id/deliverTo" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="13sp" android:textColor="@color/ink"/>
+    <TextView android:id="@+id/distance" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="13sp" android:textColor="@color/accent" android:fontFamily="monospace" android:layout_marginTop="4dp"/>
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="8dp">
         <Button android:id="@+id/route" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Route"/>
         <Button android:id="@+id/action" android:layout_width="0dp" android:layout_weight="2" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:backgroundTint="@color/accent" android:textColor="#FFFFFF"/>
