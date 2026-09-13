@@ -31,14 +31,14 @@ finds it the same way it finds the simulated ones.
 ## In action
 
 The run below is against the MVP fleet (branch `main` after its PR #1) on
-unidatum v2.367.0, with the phone, a Galaxy S23 Ultra, on the same Tailscale
+unidatum v2.368.0, with the phone, a Galaxy S23 Ultra, on the same Tailscale
 network as the machine running compose.
 
 ### 1. Joined and waiting
 
 <img src="docs/screenshots/1-idle.png" width="360" alt="The app idle: node status, position, hub-1 sees me available, no orders">
 
-The node is up inside the app: `courier-sm-s918u`, engine v2.367.0, a member
+The node is up inside the app: `courier-sm-s918u`, engine v2.368.0, a member
 of `chain-platform-shared`, holding 350 files (the members of
 `platform_orders` and `menu_published` it has replicated) and peered with 7
 nodes (hub-1 and, through it, the rest of the fleet). "hub-1 sees me:
@@ -300,7 +300,7 @@ hold yet (`/api/files` + `/api/fetch`), as the MVP's `ensureLocal` does.
 ## Build and run
 
 ```sh
-tools/fetch-natives.sh v2.367.0          # once; needs gh auth for the release repo
+tools/fetch-natives.sh v2.368.0          # once; needs gh auth for the release repo
 JAVA_HOME=~/jdk/jdk17 ANDROID_HOME=~/android-sdk ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
@@ -323,7 +323,7 @@ same network can query the phone's copy), 47800 sync, 47801 DHT.
 - The signature covers the position, not `state`: the hub writes `state` too, so a signature over it would break on every dispatch. Nothing rejects a replayed position yet, though its age is visible.
 - The map's route comes from OSRM's public router; with no network it falls back to a straight line. Tiles are OpenStreetMap's, fine for a demo and not for a fleet of couriers.
 - Only the latest position is kept, on the courier document. A position history for analytics would be an event stream in its own table.
-- Until the menu table's members have landed, the names come through hub-1 (the node answers the query by asking its peers), and a pickup with no network would show item ids. Landing them needs unidatum after v2.367.0: the phone sees head-office and hub-1 at one address on two ports, and older engines kept only the first, unpublished one (fixed in peer-to-peer-db PR #1046).
+- Until the menu table's members have landed, the names come through hub-1 (the node answers the query by asking its peers), and a pickup with no network would show item ids. Landing them needs unidatum v2.368.0 or later: before it, the phone saw head-office and hub-1 at one address on two ports and kept only the first, unpublished one.
 - One hub (`hub-1`) and the MVP's port numbers are constants in `Courier.kt`; only the host is editable in the app.
 - The phone reaches the rest of the fleet only through hub-1, since only hub-1's shared port is published by compose.
 - The debug build only. A release build needs a signing key; no ProGuard rules are written.
