@@ -20,6 +20,7 @@
     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="sync 17811 · platform-eu API 17520 · this phone is a node of chain-platform-shared" android:textSize="11sp" android:textColor="@color/muted" android:fontFamily="monospace"/>
     <Switch android:id="@+id/gpsMode" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Position from GPS (off: a simulated ride to the pickup, then the customer)" android:textSize="13sp" android:layout_marginTop="8dp"/>
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="8dp">
+        <Button android:id="@+id/openMap" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Map" android:layout_marginEnd="8dp"/>
         <Button android:id="@+id/restartNode" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Restart node"/>
         <Button android:id="@+id/toggleLog" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Node log" android:layout_marginStart="8dp"/>
     </LinearLayout>

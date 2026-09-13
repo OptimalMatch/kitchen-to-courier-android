@@ -63,6 +63,9 @@ class MapActivity : AppCompatActivity() {
         findViewById<Button>(R.id.recentre).setOnClickListener {
             follow = true; (it as Button).text = "Following"; map.controller.animateTo(GeoPoint(courier.lat, courier.lon))
         }
+        // Back to the orders list. The theme has no action bar, so the way back has to be a control on the screen
+        // rather than a system up arrow nobody can see.
+        findViewById<Button>(R.id.back).setOnClickListener { finish() }
         findViewById<Button>(R.id.navigate).setOnClickListener { openMapsApp() }
         findViewById<Button>(R.id.mapAction).setOnClickListener { act() }
         tick()
@@ -80,32 +83,18 @@ class MapActivity : AppCompatActivity() {
                 // The chevron, not the image centre, sits on the courier: the cone above it is where they are
                 // looking, and anchoring on the middle of the whole icon would push the courier backwards by
                 // half a cone.
-                setAnchor(0.5f, 0.68f)
+                // The middle of the chevron, not the middle of the image: the cone above it is headroom, and the
+                // ring the pulse draws is centred on the courier's point, so the two must agree on where that is.
+                setAnchor(0.5f, 0.70f)
                 icon = getDrawable(R.drawable.pin_me)
             }
             map.overlays.add(me)
         }
-        me!!.position = here
-        me!!.rotation = -courier.heading.toFloat()   // osmdroid turns the icon anticlockwise; a bearing turns clockwise
+        placeMe()
+        drawRoute()
         if (o != null) {
             markOnce("pickup", o.optJSONObject("pickup"), R.drawable.pin_pickup)
             markOnce("delivery", o.optJSONObject("delivery"), R.drawable.pin_delivery)
-            val leg = courier.route
-            if (leg != null) {
-                if (line == null) { line = Polyline(map).apply { outlinePaint.color = Color.parseColor("#C8541F"); outlinePaint.strokeWidth = 12f }; map.overlays.add(0, line) }
-                val pts = leg.points.map { GeoPoint(it[1], it[0]) }
-                line!!.setPoints(pts)
-                // A new leg: show the whole of it once, so the courier sees where they are going before it starts
-                // following them. Panning afterwards is theirs to do.
-                val key = o.optString("_id") + o.optString("status")
-                if (key != fitted) {
-                    fitted = key
-                    follow = false   // a fit that follow-me immediately re-centres is no fit at all
-                    findViewById<Button>(R.id.recentre).text = "Follow me"
-                    val lats = pts.map { it.latitude } + here.latitude; val lons = pts.map { it.longitude } + here.longitude
-                    map.post { map.zoomToBoundingBox(BoundingBox(lats.max() + 0.004, lons.max() + 0.004, lats.min() - 0.004, lons.min() - 0.004), false, 60) }
-                }
-            }
             val status = o.optString("status")
             val d = courier.metresToTarget(o)
             val eta = courier.route?.let { if (it.seconds > 0) " · ${Math.round(it.seconds / 60)} min by bike" else "" } ?: ""
@@ -116,14 +105,43 @@ class MapActivity : AppCompatActivity() {
                 (if (d == null) "" else "\n" + (if (d >= 1000) "%.1f km".format(d / 1000) else "${d.toInt()} m") + eta)
             findViewById<Button>(R.id.mapAction).text = if (status == "ready") "Collected" else "Delivered"
             findViewById<Button>(R.id.mapAction).isEnabled = true
+            findViewById<Button>(R.id.mapAction).visibility = android.view.View.VISIBLE
         } else {
-            findViewById<TextView>(R.id.mapTitle).text = courier.id
-            findViewById<TextView>(R.id.mapWhere).text = "No order in hand. This is where you are; the hub sees it every 5 seconds."
-            findViewById<Button>(R.id.mapAction).isEnabled = false
+            findViewById<TextView>(R.id.mapTitle).text = courier.id + (if (courier.moving()) " · moving ${courier.compass()}" else " · stopped")
+            findViewById<TextView>(R.id.mapWhere).text =
+                (if (courier.moving()) "No order in hand: riding back to the hub area, where dispatch looks for the nearest courier."
+                 else "No order in hand. This is where you are; the hub sees it every 5 seconds.")
+            // No order: an accent-coloured button with no label on it is just a red rectangle.
+            findViewById<Button>(R.id.mapAction).visibility = android.view.View.GONE
         }
         if (follow) map.controller.setCenter(here)
         map.invalidate()
         ui.postDelayed({ tick() }, 2000)
+    }
+
+    /** The leg the courier is riding, whether that is to a pickup, a customer or back to the hub. A new leg is shown
+     *  whole once, so the courier sees where they are going before the map starts following them. */
+    private fun drawRoute() {
+        val leg = courier.route ?: return
+        if (line == null) { line = Polyline(map).apply { outlinePaint.color = Color.parseColor("#C8541F"); outlinePaint.strokeWidth = 12f }; map.overlays.add(0, line) }
+        val pts = leg.points.map { GeoPoint(it[1], it[0]) }
+        line!!.setPoints(pts)
+        val o = order()
+        val key = (o?.optString("_id") ?: "home") + (o?.optString("status") ?: "")
+        if (key == fitted) return
+        fitted = key
+        follow = false   // a fit that follow-me immediately re-centres is no fit at all
+        findViewById<Button>(R.id.recentre).text = "Follow me"
+        val lats = pts.map { it.latitude } + courier.lat; val lons = pts.map { it.longitude } + courier.lon
+        map.post { map.zoomToBoundingBox(BoundingBox(lats.max() + 0.004, lons.max() + 0.004, lats.min() - 0.004, lons.min() - 0.004), false, 60) }
+    }
+
+    /** Put the chevron where the courier is, facing the way they are. The pulse reads the courier's position straight
+     *  out of the same fields on every frame, so the marker has to be moved on every frame too: refreshing it only on
+     *  the 2-second tick left the ring sitting up to a whole step ahead of the chevron after each move. */
+    private fun placeMe() {
+        me?.position = GeoPoint(courier.lat, courier.lon)
+        me?.rotation = -courier.heading.toFloat()   // osmdroid turns the icon anticlockwise; a bearing turns clockwise
     }
 
     private val marks = HashMap<String, Marker>()
@@ -181,7 +199,7 @@ class MapActivity : AppCompatActivity() {
     private val beat = object : Runnable {
         override fun run() {
             if (!alive || !resumed) return
-            if (courier.moving()) map.invalidate()
+            if (courier.moving()) { placeMe(); map.invalidate() }
             ui.postDelayed(this, 40)
         }
     }
