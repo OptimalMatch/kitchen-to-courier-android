@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:fitsSystemWindows="true">
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="KITCHEN TO COURIER" android:textSize="11sp" android:letterSpacing="0.12" android:textColor="@color/accent"/>
+    <TextView android:id="@+id/courierId" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="26sp" android:textStyle="bold" android:textColor="@color/ink" android:fontFamily="serif"/>
+    <TextView android:id="@+id/nodeStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:textColor="@color/muted" android:fontFamily="monospace" android:layout_marginTop="4dp" android:text="node: starting"/>
+    <TextView android:id="@+id/hubSeen" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:textColor="@color/muted" android:fontFamily="monospace"/>
+
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="MY ORDERS" android:textSize="11sp" android:letterSpacing="0.12" android:textColor="@color/muted" android:layout_marginTop="20dp"/>
+    <TextView android:id="@+id/empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Nothing dispatched to you yet. Dispatch on hub-1 assigns the nearest available courier when a kitchen marks an order ready." android:textColor="@color/muted" android:layout_marginTop="8dp"/>
+    <androidx.recyclerview.widget.RecyclerView android:id="@+id/orders" android:layout_width="match_parent" android:layout_height="wrap_content" android:nestedScrollingEnabled="false"/>
+
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="HUB" android:textSize="11sp" android:letterSpacing="0.12" android:textColor="@color/muted" android:layout_marginTop="24dp"/>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+        <EditText android:id="@+id/hubHost" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:hint="hub-1 host (pop-os-1)" android:inputType="textUri" android:textSize="14sp" android:fontFamily="monospace"/>
+        <Button android:id="@+id/saveHub" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Rejoin" android:layout_marginStart="8dp"/>
+    </LinearLayout>
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="sync 17811 · platform-eu API 17520 · this phone is a node of chain-platform-shared" android:textSize="11sp" android:textColor="@color/muted" android:fontFamily="monospace"/>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="8dp">
+        <Button android:id="@+id/restartNode" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Restart node"/>
+        <Button android:id="@+id/toggleLog" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Node log" android:layout_marginStart="8dp"/>
+    </LinearLayout>
+    <HorizontalScrollView android:id="@+id/logBox" android:layout_width="match_parent" android:layout_height="wrap_content" android:visibility="gone" android:background="@drawable/card" android:padding="8dp" android:layout_marginTop="8dp">
+        <TextView android:id="@+id/log" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="10sp" android:fontFamily="monospace" android:textColor="@color/ink"/>
+    </HorizontalScrollView>
+</LinearLayout>
+</ScrollView>
