@@ -28,8 +28,10 @@ class Courier private constructor(ctx: Context) {
         const val SIM_SPEED_MPS = 8.0   // about 29 km/h, a brisk e-bike; the demo's clock
     }
     val prefs = ctx.getSharedPreferences("courier", Context.MODE_PRIVATE)
+    /** Empty until someone types it: the address of the machine running the fleet is theirs, not something to ship
+     *  a default for. The app does nothing until it has one. */
     var hubHost: String
-        get() = prefs.getString("hubHost", "100.67.6.34")!!
+        get() = prefs.getString("hubHost", "")!!
         set(v) { prefs.edit().putString("hubHost", v).apply() }
     val hubSyncPort get() = prefs.getInt("hubSyncPort", 17811)
     val hubEuPort get() = prefs.getInt("hubEuPort", 17520)

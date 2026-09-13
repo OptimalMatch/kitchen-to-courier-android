@@ -81,6 +81,7 @@ class MainActivity : AppCompatActivity() {
             if (!NodeService.running()) { status.append("node: starting"); render(status.toString(), orders, menu, hubSeen); return }
             val st = courier.local.status()
             status.append("node ${st.optString("nodeName")} · ${st.optString("engineVersion")} · ${st.optString("library")} · ${st.optInt("files")} files · ${courier.local.peers().length()} peers")
+            if (courier.hubHost.isEmpty()) { status.append("\nSet the hub's address below, then Rejoin."); render(status.toString(), orders, menu, hubSeen); return }
             if (!courier.joined) { NodeService.logLine(courier.join()); NodeService.logLine("joined ${courier.hubHost}") }
             if (!courier.registered) NodeService.logLine(courier.register())
             orders = courier.myOrders()

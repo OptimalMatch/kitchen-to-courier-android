@@ -14,7 +14,7 @@
 
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="HUB" android:textSize="11sp" android:letterSpacing="0.12" android:textColor="@color/muted" android:layout_marginTop="24dp"/>
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
-        <EditText android:id="@+id/hubHost" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:hint="hub-1 host (pop-os-1)" android:inputType="textUri" android:textSize="14sp" android:fontFamily="monospace"/>
+        <EditText android:id="@+id/hubHost" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:hint="hub-1 host: the machine running the fleet" android:inputType="textUri" android:textSize="14sp" android:fontFamily="monospace"/>
         <Button android:id="@+id/saveHub" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Rejoin" android:layout_marginStart="8dp"/>
     </LinearLayout>
     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="sync 17811 · platform-eu API 17520 · this phone is a node of chain-platform-shared" android:textSize="11sp" android:textColor="@color/muted" android:fontFamily="monospace"/>
