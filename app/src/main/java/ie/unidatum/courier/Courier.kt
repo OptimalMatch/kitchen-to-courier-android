@@ -15,6 +15,8 @@ import java.time.Instant
  *   step 5    /api/doc/update $set collected / delivered                  locally
  *             couriers $set state available on platform-eu               at the hub
  */
+data class MenuItem(val name: String, val priceCents: Long)
+
 class Courier(ctx: Context) {
     val prefs = ctx.getSharedPreferences("courier", Context.MODE_PRIVATE)
     var hubHost: String
@@ -34,12 +36,18 @@ class Courier(ctx: Context) {
 
     fun now(): String = Instant.now().toString()
 
+    /** Where the courier is: fixed at hub-1's pickup point in this demo (no GPS); what the couriers document carries. */
+    val location: JSONObject get() = JSONObject().put("type", "Point").put("coordinates", JSONArray().put(-6.32).put(53.35))
+
     /** Peer with the hub's shared node and follow the orders collection. Idempotent. */
     fun join(): String {
         val s = local.sync(hubHost, hubSyncPort)
         val r = local.replicate("platform_orders")
+        // The chain publishes its menu into the shared library (signed, the menu-publish pipeline);
+        // holding it locally is what lets the card name the items at a pickup with no network.
+        val m = local.replicate("menu_published")
         joined = true
-        return "sync: ${s.optString("msg", s.toString())}; replicate: ${r.optString("msg")}"
+        return "sync: ${s.optString("msg", s.toString())}; replicate: ${r.optString("msg")}; menu: ${m.optString("msg")}"
     }
 
     /** One couriers document on platform-eu, near hub-1's pickup so dispatch's $near finds it. */
@@ -48,7 +56,7 @@ class Courier(ctx: Context) {
         val mine = eu.find("couriers", JSONObject().put("_id", id), 1).firstOrNull()
         if (mine == null) {
             eu.put("couriers", JSONObject().put("_id", id).put("courier_id", id).put("hub_id", hubId).put("state", "available")
-                .put("location", JSONObject().put("type", "Point").put("coordinates", JSONArray().put(-6.32).put(53.35)))
+                .put("location", location)
                 .put("current_order", JSONObject.NULL).put("updated_at", now()))
             registered = true
             return "registered $id on platform-eu"
@@ -73,6 +81,23 @@ class Courier(ctx: Context) {
         local.ensureLocal("platform_orders.")
         local.update("platform_orders", JSONObject().put("_id", orderId).put("status", "collected"), JSONObject().put("status", "delivered").put("delivered_at", now()))
         hubEu.update("couriers", JSONObject().put("_id", id), JSONObject().put("state", "available").put("current_order", JSONObject.NULL).put("updated_at", now()))
+    }
+
+    /** restaurant:item -> (name, price) from the chain's published menu, read from the phone's node. Refreshed every minute; empty until the table has arrived. */
+    @Volatile private var menu: Map<String, MenuItem> = emptyMap()
+    @Volatile private var menuAt = 0L
+    fun menu(): Map<String, MenuItem> {
+        if (menu.isEmpty() || System.currentTimeMillis() - menuAt > 60_000) {
+            try {
+                val (local_, rows) = local.sqlFull("SELECT restaurant_id, item_id, name, price_cents FROM menu_published")
+                menu = rows.associate { "${it.optString("restaurant_id")}:${it.optString("item_id")}" to MenuItem(it.optString("name"), it.optLong("price_cents")) }
+                menuAt = System.currentTimeMillis()
+                // Answered through the hub: the members are not here yet. Ask again for them; it is idempotent
+                // and the names will keep coming from the hub until they land — after which the pickup needs no network.
+                if (!local_) NodeService.logLine("menu: from the hub; replicate: " + local.replicate("menu_published").optString("msg"))
+            } catch (e: Exception) { NodeService.logLine("menu: ${e.message}") }
+        }
+        return menu
     }
 
     /** What the hub sees of me — for the node tab; from platform-eu. */

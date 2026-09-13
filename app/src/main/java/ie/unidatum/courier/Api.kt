@@ -35,6 +35,14 @@ class Api(val base: String) {
         val docs = call("POST", "/api/doc/find", b).optJSONArray("documents") ?: JSONArray()
         return (0 until docs.length()).map { docs.getJSONObject(it) }
     }
+    /** /api/sql over the node's tables; a table the node does not hold yet is answered through its peers when they are reachable. */
+    fun sql(query: String): List<JSONObject> = sqlFull(query).second
+    /** The rows and whether the node answered from its own members ("answered by scatter" in the note means it asked peers). */
+    fun sqlFull(query: String): Pair<Boolean, List<JSONObject>> {
+        val j = call("POST", "/api/sql", JSONObject().put("query", query), 30000)
+        val rows = j.optJSONArray("rows") ?: JSONArray()
+        return Pair(!j.optString("note").contains("scatter"), (0 until rows.length()).map { rows.getJSONObject(it) })
+    }
     fun count(collection: String, filter: JSONObject): Int = call("POST", "/api/doc/count", JSONObject().put("collection", collection).put("filter", filter)).optInt("count")
     fun update(collection: String, filter: JSONObject, set: JSONObject): JSONObject =
         call("POST", "/api/doc/update", JSONObject().put("collection", collection).put("filter", filter).put("update", JSONObject().put("\$set", set)))

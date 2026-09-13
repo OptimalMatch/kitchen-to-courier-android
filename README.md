@@ -40,35 +40,57 @@ network as the machine running compose.
 
 The node is up inside the app: `courier-sm-s918u`, engine v2.367.0, a member
 of `chain-platform-shared`, holding 246 files (the members of
-`platform_orders` it has replicated) and peered with 7 nodes (hub-1 and,
+`platform_orders` and `menu_published` it has replicated) and peered with 7 nodes (hub-1 and,
 through it, the rest of the fleet). "hub-1 sees me: available" is read from
 the platform's `couriers` collection on hub-1's other library. Nothing has
 been dispatched.
 
 ### 2. Dispatched
 
-<img src="docs/screenshots/2-ready.png" width="360" alt="An order dispatched to the phone, status ready, a Collected button">
+<img src="docs/screenshots/2-ready.png" width="360" alt="An order dispatched to the phone: named items, pickup and delivery addresses, Route to pickup and Collected buttons">
 
-A customer placed an order (`sims/customer.mjs`), restaurant r1's kitchen
+A customer placed an order (`sims/customer.mjs`), restaurant r2's kitchen
 accepted it and marked it ready, and hub-1's dispatch assigned it to the
 nearest available courier: the phone. The hub wrote `courier_id` on the
 order and `state: assigned` on the courier document. The phone's node pulled
 the new member on its 5-second sync, the app's 3-second poll of its own node
-found an order with its id, and the card appeared. Dispatch to on-phone here
-took about a second; the hub's log line for it was
-`hub-1: o-live-mtz4n4iz-0 -> app-sm-s918u`.
+found an order with its id, and the card appeared. The hub's log line for it
+was `hub-1: o-live-mtz4zaod-1 -> app-sm-s918u`.
+
+The card is what a courier checks the bag against at the counter: the line
+count and total first, then each line by name. The order document itself
+carries only item ids and prices; the names come from `menu_published`,
+the chain's signed menu that its menu-publish pipeline lands in the shared
+library. The phone replicates that table too, so the lookup is local. A
+line that appears twice on the order is folded into one line with the
+quantity summed. Below the lines are the two addresses the order carries:
+`pickup` (the restaurant's, written by the platform when it created the
+order) and `delivery` (the customer's).
 
 ### 3. Collected
 
-<img src="docs/screenshots/3-collected.png" width="360" alt="The order after Collected: status collected, a Delivered button">
+<img src="docs/screenshots/3-collected.png" width="360" alt="The order after Collected: status collected, Route to customer and Delivered buttons">
 
 The courier tapped Collected. The app ran one update on the node in the
 phone: `{_id, status: ready} $set {status: collected, collected_at}`. The
-status pill changed from the phone's own read. hub-1 saw the change 1.4 s
-later (measured by polling hub-1's API from the host until the document
+status pill changed from the phone's own read, and the route button turned
+to the customer. hub-1 saw the change 1.4 to 2.0 s later across the runs
+(measured by polling hub-1's API from the host until the document
 changed). Delivered is the same shape and also sets the courier document
-back to `available` on the platform; it reached hub-1 in 1.5 to 2.0 s
-across the runs.
+back to `available` on the platform; it reached hub-1 in 1.5 to 2.0 s.
+
+### The route
+
+<img src="docs/screenshots/5-route-pickup.jpg" width="300" alt="Google Maps: bicycle route from the courier's position to the pickup, 13 min, 4.0 km"> <img src="docs/screenshots/6-route-customer.jpg" width="300" alt="Google Maps: bicycle route from the pickup to the customer, 3 min, 750 m">
+
+Route hands the phone's maps app a directions link built from the points
+on the order document, bicycle mode. Before the order is collected the
+route runs from the courier's position to the pickup (left: 13 min, 4.0 km
+to Capel Street); after, from the pickup to the customer (right: 3 min,
+750 m to Smithfield). The app draws no map of its own and needs no maps
+API key; any maps app that takes a directions URL will do, and the browser
+otherwise. In this demo the courier's position is the fixed point the app
+registered at hub-1's pickup area, since the phone was not in Dublin.
 
 ### 4. What the node saw
 
@@ -132,9 +154,10 @@ The app talks to it at `http://127.0.0.1:7480` with the same calls the MVP's
 
 | step | call | where |
 |---|---|---|
-| join | `POST /api/sync {host, port: 17811}` then `POST /api/table/replicate {table: platform_orders}` | the phone's node |
+| join | `POST /api/sync {host, port: 17811}` then `POST /api/table/replicate` for `platform_orders` and `menu_published` | the phone's node |
 | register | `POST /api/doc/put couriers {_id: app-<model>, hub_id: hub-1, state: available, location near hub-1's pickup}` | platform-eu, hub-1's API (17520) |
 | 4 | `POST /api/doc/find platform_orders {courier_id: mine, status: {$in: [ready, collected]}}` every 3 s | the phone's node |
+| 4 | `POST /api/sql SELECT restaurant_id, item_id, name, price_cents FROM menu_published`, cached a minute, to name the lines | the phone's node |
 | 5 | `POST /api/doc/update {_id, status: ready} $set {status: collected, collected_at}` | the phone's node |
 | 5 | `$set {status: delivered, delivered_at}`, then `couriers $set {state: available, current_order: null}` | the phone's node; platform-eu |
 
@@ -163,7 +186,8 @@ same network can query the phone's copy), 47800 sync, 47801 DHT.
 ## Limits
 
 - arm64 only, Android 10+; the engine is a static Go binary, DuckDB is the musl build.
-- The courier's location is fixed at hub-1's pickup; a real app would write GPS fixes to its `couriers` document.
+- The courier's location is fixed at hub-1's pickup; a real app would write GPS fixes to its `couriers` document and route from them.
+- Until the menu table's members have landed, the names come through hub-1 (the node answers the query by asking its peers), and a pickup with no network would show item ids. Landing them needs unidatum after v2.367.0: the phone sees head-office and hub-1 at one address on two ports, and older engines kept only the first, unpublished one (fixed in peer-to-peer-db PR #1046).
 - One hub (`hub-1`) and the MVP's port numbers are constants in `Courier.kt`; only the host is editable in the app.
 - The phone reaches the rest of the fleet only through hub-1, since only hub-1's shared port is published by compose.
 - The debug build only. A release build needs a signing key; no ProGuard rules are written.
