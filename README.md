@@ -31,8 +31,8 @@ finds it the same way it finds the simulated ones.
 ## In action
 
 The run below is against the MVP fleet (branch `main` after its PR #1) on
-unidatum v2.368.0, with the phone, a Galaxy S23 Ultra, on the same Tailscale
-network as the machine running compose.
+unidatum v2.368.0, with the phone, a Galaxy S23 Ultra, on the same network
+as the machine running compose.
 
 ### 1. Joined and waiting
 
@@ -308,8 +308,8 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 Or install the APK from the [releases](../../releases).
 
 On the MVP side: `bin/demo-up.sh`, then set the hub host in the app to the
-machine running compose (a Tailscale or LAN address the phone reaches; the
-addresses are blurred out of the screenshots above).
+machine running compose (an address the phone reaches; the addresses are
+blurred out of the screenshots above).
 Place orders with `docker compose run --rm tools node sims/customer.mjs`;
 the nearest available courier to hub-1's pickup is the phone, so dispatch
 assigns them to it and they appear on the phone with a Collected button.
