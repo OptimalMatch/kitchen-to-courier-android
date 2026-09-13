@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.preference.PreferenceManager
+import android.view.View
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
@@ -66,6 +67,11 @@ class MapActivity : AppCompatActivity() {
         // Back to the orders list. The theme has no action bar, so the way back has to be a control on the screen
         // rather than a system up arrow nobody can see.
         findViewById<Button>(R.id.back).setOnClickListener { finish() }
+        // Only for the simulated ride: with real fixes there is nothing to skip, the courier is where they are.
+        findViewById<Button>(R.id.skip).apply {
+            visibility = if (courier.locationMode == "sim") View.VISIBLE else View.GONE
+            setOnClickListener { work.execute { NodeService.logLine(courier.skipRide()); ui.post { fitted = "" } } }
+        }
         findViewById<Button>(R.id.navigate).setOnClickListener { openMapsApp() }
         findViewById<Button>(R.id.mapAction).setOnClickListener { act() }
         tick()
@@ -109,7 +115,7 @@ class MapActivity : AppCompatActivity() {
         } else {
             findViewById<TextView>(R.id.mapTitle).text = courier.id + (if (courier.moving()) " · moving ${courier.compass()}" else " · stopped")
             findViewById<TextView>(R.id.mapWhere).text =
-                (if (courier.moving()) "No order in hand: riding back to the hub area, where dispatch looks for the nearest courier."
+                (if (courier.moving()) ("No order in hand: riding back to " + (courier.homeAddress.ifEmpty { "the hub" }) + ", where dispatch looks for the nearest courier.")
                  else "No order in hand. This is where you are; the hub sees it every 5 seconds.")
             // No order: an accent-coloured button with no label on it is just a red rectangle.
             findViewById<Button>(R.id.mapAction).visibility = android.view.View.GONE

@@ -120,11 +120,15 @@ end to end, phone to platform.
 
 **Two modes**, the switch at the bottom of the screen:
 
-- **Simulated (the default).** The courier rides a straight line at 8 m/s
-  (about 29 km/h) toward whatever the order says is next: the pickup while
-  it is ready, the customer once collected, and back toward the hub's area
-  when there is no order, which is where dispatch looks for the nearest
-  courier. The position survives a restart of the app.
+- **Simulated (the default).** The courier rides at 8 m/s (about 29 km/h)
+  along the route toward whatever the order says is next: the pickup while
+  it is ready, the customer once collected, and back to the hub when there
+  is no order, which is where dispatch looks for the nearest courier. The
+  hub's address comes from the platform's own `hubs` collection, so the app
+  does not carry a copy of where the hub is. The position survives a restart
+  of the app, and **Skip** on the map puts the courier at the end of the leg
+  — a simulation control, for showing the flow without riding out eight
+  minutes of Dublin traffic.
 - **GPS.** The phone's own fixes, through the foreground service, once the
   location permission is granted. This is the product path. It is off by
   default because the demo fleet's addresses are in Dublin and a phone
