@@ -62,9 +62,16 @@ class Courier private constructor(ctx: Context) {
     private fun face(fromLon: Double, fromLat: Double) {
         val mPerDegLat = 111_320.0; val mPerDegLon = mPerDegLat * Math.cos(Math.toRadians(lat))
         val dx = (lon - fromLon) * mPerDegLon; val dy = (lat - fromLat) * mPerDegLat
-        if (Math.hypot(dx, dy) < 1.0) return
+        val d = Math.hypot(dx, dy)
+        if (d > 0.4) lastMoveAt = System.currentTimeMillis()
+        if (d < 1.0) return
         heading = (Math.toDegrees(Math.atan2(dx, dy)) + 360.0) % 360.0
     }
+
+    /** When the courier last actually moved, and whether that was recent enough to call them under way. A courier
+     *  waiting at a door, or one whose phone has stopped reporting, is not moving and should not look like it. */
+    @Volatile var lastMoveAt = 0L
+    fun moving(): Boolean = System.currentTimeMillis() - lastMoveAt < 8000
 
     /** The heading as a compass point, for a person to read. */
     fun compass(): String = listOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")[(((heading + 22.5) % 360) / 45).toInt()]

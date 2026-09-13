@@ -135,7 +135,7 @@ computed from the same position.
 
 ### The map
 
-<img src="docs/screenshots/7-map.jpg" width="360" alt="The in-app map: OpenStreetMap tiles of Dublin, the courier's arrow pointing east on Golden Lane, a cycling route to the pickup pin at Camden Street, 555 m and 4 minutes">
+<img src="docs/screenshots/7-map.jpg" width="360" alt="The in-app map: OpenStreetMap tiles of Dublin, the courier's chevron with its facing cone on Charlemont Street, a cycling route to the customer in Leeson Street Upper, 466 m and 4 minutes, the title reading collected and moving SE">
 
 Everything on this screen comes from two documents the phone already holds:
 the order, from its own node, and the position it writes itself. The map is
@@ -153,12 +153,22 @@ too, so nobody has to go back to the list mid-ride.
 The simulated ride follows the same polyline, which is why the track on the
 map runs along streets rather than through buildings.
 
-The courier is an arrow, not a dot, because the position carries a heading:
-the phone's own bearing in GPS mode, and the direction of travel otherwise.
-In the shot above the arrow points east along Golden Lane, and the document
-behind it read 100.1°. A customer app can point its courier icon the same
-way, and know the direction came from the courier rather than from whoever
-last wrote the row — the heading is inside the signed claim.
+The courier is a chevron with a cone, not a dot, because the position carries
+a heading: the phone's own bearing in GPS mode, and the direction of travel
+otherwise. The shape is deliberately not a teardrop — the pickup and the
+customer are teardrops, and a courier standing at a door has to still read as
+two things and not one blob. A customer app can point its courier icon the
+same way, and know the direction came from the courier rather than from
+whoever last wrote the row, because the heading is inside the signed claim.
+
+<img src="docs/screenshots/8-pulse.jpg" width="700" alt="Four consecutive frames of the courier riding: a green ring expands and fades from under the chevron">
+
+Four consecutive frames while the courier rides down Harcourt Road. The ring
+expands from under the chevron and fades, and it runs only while the courier
+is actually moving — not on a timer. A courier waiting at a door, or one
+whose phone has gone quiet, sits still and the title says `stopped` instead
+of `moving SE`. The animation carries information rather than decorating the
+screen.
 
 ### Positions the hub can trust
 
