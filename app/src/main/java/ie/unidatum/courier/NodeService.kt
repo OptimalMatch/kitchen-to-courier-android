@@ -64,11 +64,14 @@ class NodeService : Service() {
      *  next point — or the phone's GPS fixes when the mode says so. Runs as long as the service does, screen off included. */
     private fun positions() {
         val c = Courier.get(this)
+        Keys.warm()
         var mode = ""
         while (positionLoop) {
             try {
                 if (c.locationMode != mode) { mode = c.locationMode; setGps(mode == "gps", c) ; logLine("position: $mode") }
-                if (mode == "sim") { if (c.joined) try { c.myOrders() } catch (_: Exception) {}; c.rideStep(5.0) }
+                if (c.joined) try { c.myOrders() } catch (_: Exception) {}
+                try { c.refreshRoute() } catch (e: Exception) { logLine("route: ${e.message}") }
+                if (mode == "sim") c.rideStep(5.0)
                 if (c.registered) c.publishLocation()
             } catch (e: Exception) { logLine("position: ${e.message}") }
             Thread.sleep(5000)
@@ -83,7 +86,7 @@ class NodeService : Service() {
             logLine("position: gps mode needs the location permission; staying where the last fix or the ride left off"); return
         }
         val l = object : LocationListener {
-            override fun onLocationChanged(loc: Location) { c.fix(loc.longitude, loc.latitude) }
+            override fun onLocationChanged(loc: Location) { c.fix(loc.longitude, loc.latitude, if (loc.hasBearing()) loc.bearing.toDouble() else null) }
             @Deprecated("") override fun onStatusChanged(p: String?, s: Int, e: android.os.Bundle?) {}
             override fun onProviderEnabled(p: String) {}
             override fun onProviderDisabled(p: String) {}

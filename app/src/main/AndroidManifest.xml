@@ -17,6 +17,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name=".MapActivity" android:exported="false" android:parentActivityName=".MainActivity"/>
         <service android:name=".NodeService" android:exported="false" android:foregroundServiceType="dataSync|location" />
     </application>
 </manifest>

@@ -97,7 +97,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.nodeStatus).text = status
         findViewById<TextView>(R.id.hubSeen).text = if (hubSeen.isEmpty()) "" else "hub-1 sees me: $hubSeen"
         val age = if (courier.lastPublished == 0L) "not yet" else "${(System.currentTimeMillis() - courier.lastPublished) / 1000}s ago"
-        findViewById<TextView>(R.id.position).text = "position ${"%.5f".format(courier.lat)}, ${"%.5f".format(courier.lon)} · ${courier.locationMode} · sent $age" + (courier.publishError?.let { " · $it" } ?: "")
+        findViewById<TextView>(R.id.position).text = "position ${"%.5f".format(courier.lat)}, ${"%.5f".format(courier.lon)} · facing ${courier.compass()} · ${courier.locationMode} · signed ${Keys.backing} · sent $age" + (courier.publishError?.let { " · $it" } ?: "")
         findViewById<TextView>(R.id.empty).visibility = if (orders.isEmpty()) View.VISIBLE else View.GONE
         adapter.submit(orders, menu)
         findViewById<TextView>(R.id.log).text = synchronized(NodeService.log) { NodeService.log.takeLast(60).joinToString("\n") }
