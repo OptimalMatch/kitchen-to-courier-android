@@ -32,7 +32,8 @@ class MainActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.courierId).text = courier.id
         findViewById<EditText>(R.id.hubHost).setText(courier.hubHost)
         adapter = OrdersAdapter(onCollected = { act("collected ${it}") { courier.collected(it) } },
-                                onDelivered = { act("delivered ${it}") { courier.delivered(it) } })
+                                onDelivered = { act("delivered ${it}") { courier.delivered(it) } },
+                                myLocation = { JSONObject().put("location", courier.location) })
         findViewById<RecyclerView>(R.id.orders).apply { layoutManager = LinearLayoutManager(this@MainActivity); adapter = this@MainActivity.adapter }
         findViewById<Button>(R.id.saveHub).setOnClickListener {
             courier.hubHost = findViewById<EditText>(R.id.hubHost).text.toString().trim()
@@ -62,14 +63,16 @@ class MainActivity : AppCompatActivity() {
     private fun poll() {
         val status = StringBuilder()
         var orders: List<JSONObject> = emptyList()
+        var menu: Map<String, MenuItem> = emptyMap()
         var hubSeen = ""
         try {
-            if (!NodeService.running()) { status.append("node: starting"); render(status.toString(), orders, hubSeen); return }
+            if (!NodeService.running()) { status.append("node: starting"); render(status.toString(), orders, menu, hubSeen); return }
             val st = courier.local.status()
             status.append("node ${st.optString("nodeName")} · ${st.optString("engineVersion")} · ${st.optString("library")} · ${st.optInt("files")} files · ${courier.local.peers().length()} peers")
             if (!courier.joined) { NodeService.logLine(courier.join()); NodeService.logLine("joined ${courier.hubHost}") }
             if (!courier.registered) NodeService.logLine(courier.register())
             orders = courier.myOrders()
+            if (orders.isNotEmpty()) menu = courier.menu()
             hubSeen = courier.hubView()
             courier.lastError = null
         } catch (e: Exception) {
@@ -77,14 +80,14 @@ class MainActivity : AppCompatActivity() {
             status.append("\n${e.message}")
             NodeService.logLine("tick: ${e.message}")
         }
-        render(status.toString(), orders, hubSeen)
+        render(status.toString(), orders, menu, hubSeen)
     }
 
-    private fun render(status: String, orders: List<JSONObject>, hubSeen: String) = ui.post {
+    private fun render(status: String, orders: List<JSONObject>, menu: Map<String, MenuItem>, hubSeen: String) = ui.post {
         findViewById<TextView>(R.id.nodeStatus).text = status
         findViewById<TextView>(R.id.hubSeen).text = if (hubSeen.isEmpty()) "" else "hub-1 sees me: $hubSeen"
         findViewById<TextView>(R.id.empty).visibility = if (orders.isEmpty()) View.VISIBLE else View.GONE
-        adapter.submit(orders)
+        adapter.submit(orders, menu)
         findViewById<TextView>(R.id.log).text = synchronized(NodeService.log) { NodeService.log.takeLast(60).joinToString("\n") }
     }
 
