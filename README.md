@@ -231,15 +231,15 @@ verbatim; the hub sees how old each one is, which is how the tracker shows
 The app's log panel shows the engine's own output. Reading down from
 `collected o-live-mtz4n4iz-0`:
 
-- `sync 100.67.6.34:17811: sent 1, got 0` — the phone pushed the one
+- `sync <hub>:17811: sent 1, got 0` — the phone pushed the one
   operation (its commit) to hub-1's shared node.
-- `seeding platform_orders.collection.delta.parquet to 100.67.6.34:…` — the
+- `seeding platform_orders.collection.delta.parquet to <hub>:…` — the
   hub, and then five other nodes of the fleet (the different node ids in the
   `secure connection from` lines), came to the phone for the member that
   commit added. The phone is serving the fleet, not only consuming.
 - `merged 1 op(s), rejected 0` — a commit from the hub side arriving on the
   phone, the dispatch's write.
-- `punch: probing restaurant-1 at 100.67.6.34:47810` — the phone learned the
+- `punch: probing restaurant-1 at <fleet host>:47810` — the phone learned the
   other nodes' addresses from the hub, but only hub-1's shared port is
   published on the host, so those probes get no answer. The data still
   flows, through hub-1.
@@ -257,7 +257,7 @@ delivered_at:  2026-09-13T01:21:18.396424Z  the phone
 ```
 
 and hub-1's peer table lists the phone by the address it really has:
-`courier-sm-s918u 100.107.235.10 47800`.
+`courier-sm-s918u <the phone's address> 47800`.
 
 ## What is in the APK
 
@@ -308,7 +308,8 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 Or install the APK from the [releases](../../releases).
 
 On the MVP side: `bin/demo-up.sh`, then set the hub host in the app to the
-machine running compose (a Tailscale or LAN address the phone reaches).
+machine running compose (a Tailscale or LAN address the phone reaches; the
+addresses are blurred out of the screenshots above).
 Place orders with `docker compose run --rm tools node sims/customer.mjs`;
 the nearest available courier to hub-1's pickup is the phone, so dispatch
 assigns them to it and they appear on the phone with a Collected button.
